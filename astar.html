@@ -1,0 +1,715 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>A* Pathfinding Visualizer</title>
+    <!-- Tailwind CSS CDN for easy styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for the visualizer */
+        body {
+            font-family: 'Inter', sans-serif; /* Using Inter font */
+            background-color: #f0f4f8;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            background-color: #ffffff;
+            padding: 24px;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            max-width: 100%;
+            width: 900px; /* Max width for the container */
+        }
+
+
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            justify-content: center;
+            align-items: center;
+            padding: 16px;
+            background-color: #e2e8f0;
+            border-radius: 8px;
+        }
+
+
+        .mode-selection {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+
+        .mode-selection label {
+            background-color: #cbd5e1;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+            color: #475569;
+            font-weight: 500;
+            box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        }
+
+
+        .mode-selection input[type="radio"]:checked + label {
+            background-color: #4f46e5;
+            color: white;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -1px rgba(79, 70, 229, 0.1);
+        }
+
+
+        .mode-selection input[type="radio"] {
+            display: none; /* Hide default radio button */
+        }
+
+
+        .action-buttons button {
+            background-color: #4f46e5;
+            color: white;
+            padding: 10px 18px;
+            border-radius: 8px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background-color 0.2s ease-in-out, transform 0.1s ease-in-out;
+            box-shadow: 0 4px 6px -1px rgba(79, 70, 229, 0.2), 0 2px 4px -1px rgba(79, 70, 229, 0.1);
+        }
+
+
+        .action-buttons button:hover {
+            background-color: #4338ca;
+            transform: translateY(-1px);
+        }
+
+
+        .action-buttons button:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+
+
+        .canvas-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden; /* Ensure content doesn't spill out */
+            width: 100%; /* Take full width of parent */
+        }
+
+
+        canvas {
+            border: 2px solid #ccc;
+            background-color: #f8fafc;
+            border-radius: 8px;
+            box-shadow: inset 0 2px 4px 0 rgba(0, 0, 0, 0.06);
+            display: block; /* Remove extra space below canvas */
+            max-width: 100%; /* Ensure responsiveness */
+            height: auto; /* Maintain aspect ratio */
+        }
+
+
+        .message-box {
+            background-color: #eff6ff;
+            color: #1e40af;
+            padding: 12px;
+            border-radius: 8px;
+            border: 1px solid #bfdbfe;
+            text-align: center;
+            font-weight: 500;
+            margin-top: 10px;
+        }
+
+
+        /* Responsive adjustments */
+        @media (min-width: 768px) {
+            .controls {
+                justify-content: space-between;
+                padding: 12px 20px;
+            }
+            .action-buttons {
+                display: flex;
+                gap: 12px;
+            }
+        }
+
+
+        @media (max-width: 767px) {
+            .controls {
+                flex-direction: column;
+                align-items: stretch;
+            }
+            .action-buttons {
+                display: flex;
+                flex-direction: column;
+                gap: 8px;
+            }
+            .action-buttons button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-6">A* Pathfinding Visualizer</h1>
+
+
+        <div class="controls">
+            <div class="mode-selection">
+                <input type="radio" id="drawWall" name="mode" value="wall" checked>
+                <label for="drawWall">Draw Wall</label>
+                <input type="radio" id="setStart" name="mode" value="start">
+                <label for="setStart">Set Start</label>
+                <input type="radio" id="setEnd" name="mode" value="end">
+                <label for="setEnd">Set End</label>
+            </div>
+            <div class="action-buttons">
+                <button id="startAlgorithm">Start Algorithm</button>
+                <button id="clearGrid">Clear Walls</button>
+                <button id="resetGrid">Reset All</button>
+            </div>
+        </div>
+
+
+        <div class="message-box" id="messageBox">Click and drag to draw walls, or select a mode to set start/end points.</div>
+
+
+        <div class="canvas-container">
+            <canvas id="pathfindingCanvas"></canvas>
+        </div>
+    </div>
+
+
+    <script>
+        // Get canvas and context
+        const canvas = document.getElementById('pathfindingCanvas');
+        const ctx = canvas.getContext('2d');
+        const messageBox = document.getElementById('messageBox');
+
+
+        // Grid dimensions
+        const COLS = 50; // Number of columns
+        const ROWS = 30; // Number of rows
+        const CELL_SIZE = 20; // Size of each cell in pixels
+
+
+        // Set canvas dimensions based on cell size and grid size
+        canvas.width = COLS * CELL_SIZE;
+        canvas.height = ROWS * CELL_SIZE;
+
+
+        // Node types
+        const NODE_TYPE = {
+            EMPTY: 0,
+            WALL: 1,
+            START: 2,
+            END: 3,
+            OPEN: 4,     // Nodes being considered
+            CLOSED: 5,   // Nodes already evaluated
+            PATH: 6      // Final path
+        };
+
+
+        // Node colors
+        const COLORS = {
+            EMPTY: '#f8fafc',    // Light gray background
+            WALL: '#4b5563',     // Dark gray for walls
+            START: '#22c55e',    // Green for start node
+            END: '#ef4444',      // Red for end node
+            OPEN: '#60a5fa',     // Blue for open set
+            CLOSED: '#93c5fd',   // Lighter blue for closed set
+            PATH: '#f97316',     // Orange for the path
+            GRID_LINE: '#cbd5e1' // Light grey for grid lines
+        };
+
+
+        // Grid array to store node types
+        let grid = [];
+        let startNode = null;
+        let endNode = null;
+        let currentMode = 'wall'; // Default drawing mode
+
+
+        // Mouse drawing state
+        let isDrawing = false;
+        let lastDrawnNode = null; // To prevent drawing multiple times on the same cell
+
+
+        // Algorithm state
+        let algorithmRunning = false;
+        let openSet = [];
+        let closedSet = [];
+        let path = [];
+        let animationFrameId = null; // To cancel animation frame
+
+
+        // Node class for A* algorithm
+        class Node {
+            constructor(x, y, type = NODE_TYPE.EMPTY) {
+                this.x = x;
+                this.y = y;
+                this.type = type;
+
+
+                // A* properties
+                this.f = 0; // f = g + h (total cost)
+                this.g = 0; // g = cost from start to this node
+                this.h = 0; // h = heuristic cost from this node to end
+                this.parent = null; // Parent node for path reconstruction
+            }
+
+
+            // Method to draw the node on the canvas
+            draw(color = COLORS[Object.keys(NODE_TYPE).find(key => NODE_TYPE[key] === this.type)]) {
+                ctx.fillStyle = color;
+                ctx.fillRect(this.x * CELL_SIZE, this.y * CELL_SIZE, CELL_SIZE, CELL_SIZE);
+            }
+        }
+
+
+        // --- Grid Initialization and Drawing ---
+
+
+        // Initialize the grid with empty nodes
+        function initializeGrid() {
+            grid = new Array(COLS);
+            for (let i = 0; i < COLS; i++) {
+                grid[i] = new Array(ROWS);
+                for (let j = 0; j < ROWS; j++) {
+                    grid[i][j] = new Node(i, j);
+                }
+            }
+            startNode = null;
+            endNode = null;
+            messageBox.textContent = 'Click and drag to draw walls, or select a mode to set start/end points.';
+        }
+
+
+        // Draw the entire grid
+        function drawGrid() {
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+
+            // Draw each node based on its type
+            for (let i = 0; i < COLS; i++) {
+                for (let j = 0; j < ROWS; j++) {
+                    grid[i][j].draw();
+                }
+            }
+
+
+            // Draw grid lines
+            ctx.strokeStyle = COLORS.GRID_LINE;
+            for (let i = 0; i <= COLS; i++) {
+                ctx.beginPath();
+                ctx.moveTo(i * CELL_SIZE, 0);
+                ctx.lineTo(i * CELL_SIZE, canvas.height);
+                ctx.stroke();
+            }
+            for (let j = 0; j <= ROWS; j++) {
+                ctx.beginPath();
+                ctx.moveTo(0, j * CELL_SIZE);
+                ctx.lineTo(canvas.width, j * CELL_SIZE);
+                ctx.stroke();
+            }
+        }
+
+
+        // --- Mouse Events for Drawing ---
+
+
+        // Get grid coordinates from mouse event
+        function getGridCoords(event) {
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const mouseX = (event.clientX - rect.left) * scaleX;
+            const mouseY = (event.clientY - rect.top) * scaleY;
+            return {
+                x: Math.floor(mouseX / CELL_SIZE),
+                y: Math.floor(mouseY / CELL_SIZE)
+            };
+        }
+
+
+        // Handle mouse down event
+        canvas.addEventListener('mousedown', (e) => {
+            if (algorithmRunning) return; // Prevent interaction during algorithm run
+            isDrawing = true;
+            const { x, y } = getGridCoords(e);
+            handleInteraction(x, y);
+        });
+
+
+        // Handle mouse move event
+        canvas.addEventListener('mousemove', (e) => {
+            if (!isDrawing || algorithmRunning) return;
+            const { x, y } = getGridCoords(e);
+            if (lastDrawnNode && lastDrawnNode.x === x && lastDrawnNode.y === y) {
+                return; // Already drew on this cell
+            }
+            handleInteraction(x, y);
+            lastDrawnNode = { x, y };
+        });
+
+
+        // Handle mouse up event
+        canvas.addEventListener('mouseup', () => {
+            isDrawing = false;
+            lastDrawnNode = null;
+        });
+
+
+        // Handle mouse leave (to stop drawing if mouse leaves canvas while dragging)
+        canvas.addEventListener('mouseleave', () => {
+            isDrawing = false;
+            lastDrawnNode = null;
+        });
+
+
+        // Main interaction handler based on current mode
+        function handleInteraction(x, y) {
+            if (x < 0 || x >= COLS || y < 0 || y >= ROWS) return; // Out of bounds
+
+
+            const targetNode = grid[x][y];
+
+
+            // If drawing walls, toggle wall state
+            if (currentMode === 'wall') {
+                if (targetNode !== startNode && targetNode !== endNode) {
+                    targetNode.type = targetNode.type === NODE_TYPE.WALL ? NODE_TYPE.EMPTY : NODE_TYPE.WALL;
+                    targetNode.draw(); // Redraw only the changed node
+                }
+            } else if (currentMode === 'start') {
+                if (startNode) {
+                    startNode.type = NODE_TYPE.EMPTY; // Clear previous start
+                    startNode.draw();
+                }
+                if (targetNode !== endNode) { // Cannot set start on end node
+                    startNode = targetNode;
+                    startNode.type = NODE_TYPE.START;
+                    startNode.draw();
+                } else {
+                    messageBox.textContent = 'Start node cannot be placed on the end node.';
+                }
+            } else if (currentMode === 'end') {
+                if (endNode) {
+                    endNode.type = NODE_TYPE.EMPTY; // Clear previous end
+                    endNode.draw();
+                }
+                if (targetNode !== startNode) { // Cannot set end on start node
+                    endNode = targetNode;
+                    endNode.type = NODE_TYPE.END;
+                    endNode.draw();
+                } else {
+                    messageBox.textContent = 'End node cannot be placed on the start node.';
+                }
+            }
+            drawGrid(); // Redraw grid after changes
+        }
+
+
+        // --- A* Algorithm Implementation ---
+
+
+        // Heuristic function (Manhattan distance)
+        function heuristic(nodeA, nodeB) {
+            return Math.abs(nodeA.x - nodeB.x) + Math.abs(nodeA.y - nodeB.y);
+            // return Math.sqrt(Math.pow(nodeA.x - nodeB.x, 2) + Math.pow(nodeA.y - nodeB.y, 2)); // Euclidean distance
+        }
+
+
+        // Get neighbors of a node
+        function getNeighbors(node) {
+            const neighbors = [];
+            const x = node.x;
+            const y = node.y;
+
+
+            // Directions: Up, Down, Left, Right
+            const dx = [0, 0, 1, -1];
+            const dy = [-1, 1, 0, 0];
+
+
+            for (let i = 0; i < 4; i++) {
+                const newX = x + dx[i];
+                const newY = y + dy[i];
+
+
+                // Check bounds
+                if (newX >= 0 && newX < COLS && newY >= 0 && newY < ROWS) {
+                    const neighbor = grid[newX][newY];
+                    // Ensure neighbor is not a wall
+                    if (neighbor.type !== NODE_TYPE.WALL) {
+                        neighbors.push(neighbor);
+                    }
+                }
+            }
+            return neighbors;
+        }
+
+
+        // Reconstruct the path from end node to start node
+        function reconstructPath(currentNode) {
+            path = [];
+            let temp = currentNode;
+            while (temp.parent) {
+                path.push(temp);
+                temp = temp.parent;
+            }
+            path.reverse(); // Path from start to end
+        }
+
+
+        // A* algorithm step-by-step
+        function aStarStep() {
+            if (openSet.length > 0 && algorithmRunning) {
+                // Find the node in openSet with the lowest f cost
+                let winner = 0;
+                for (let i = 0; i < openSet.length; i++) {
+                    if (openSet[i].f < openSet[winner].f) {
+                        winner = i;
+                    }
+                    // Tie-breaking: if f costs are equal, prioritize lower h cost (closer to end)
+                    else if (openSet[i].f === openSet[winner].f && openSet[i].h < openSet[winner].h) {
+                        winner = i;
+                    }
+                }
+
+
+                let currentNode = openSet[winner];
+
+
+                // If we found the end node, reconstruct path and stop
+                if (currentNode === endNode) {
+                    reconstructPath(currentNode);
+                    algorithmRunning = false;
+                    messageBox.textContent = 'Path found!';
+                    drawGrid(); // Redraw final state
+                    // Draw path immediately
+                    path.forEach(node => node.draw(COLORS.PATH));
+                    startNode.draw(COLORS.START); // Ensure start node is green
+                    endNode.draw(COLORS.END);     // Ensure end node is red
+                    return; // Stop animation loop
+                }
+
+
+                // Move current node from openSet to closedSet
+                openSet.splice(winner, 1);
+                closedSet.push(currentNode);
+
+
+                // Mark node as closed for visualization (unless it's start/end)
+                if (currentNode.type !== NODE_TYPE.START && currentNode.type !== NODE_TYPE.END) {
+                    currentNode.type = NODE_TYPE.CLOSED;
+                }
+
+
+
+
+                // Explore neighbors
+                let neighbors = getNeighbors(currentNode);
+                for (let i = 0; i < neighbors.length; i++) {
+                    let neighbor = neighbors[i];
+
+
+                    // If neighbor is not in closedSet and not a wall
+                    if (!closedSet.includes(neighbor) && neighbor.type !== NODE_TYPE.WALL) {
+                        let tempG = currentNode.g + 1; // Cost from current to neighbor is 1
+
+
+                        let newPath = false;
+                        if (openSet.includes(neighbor)) {
+                            if (tempG < neighbor.g) {
+                                neighbor.g = tempG;
+                                newPath = true;
+                            }
+                        } else {
+                            neighbor.g = tempG;
+                            openSet.push(neighbor);
+                            newPath = true;
+                            // Mark node as open for visualization (unless it's start/end)
+                            if (neighbor.type !== NODE_TYPE.START && neighbor.type !== NODE_TYPE.END) {
+                                neighbor.type = NODE_TYPE.OPEN;
+                            }
+                        }
+
+
+                        if (newPath) {
+                            neighbor.h = heuristic(neighbor, endNode);
+                            neighbor.f = neighbor.g + neighbor.h;
+                            neighbor.parent = currentNode;
+                        }
+                    }
+                }
+                // Redraw grid for visualization of open/closed sets
+                drawGrid();
+                // Draw path progressively
+                path.forEach(node => node.draw(COLORS.PATH));
+                startNode.draw(COLORS.START); // Ensure start node is green
+                endNode.draw(COLORS.END);     // Ensure end node is red
+
+
+
+
+                animationFrameId = requestAnimationFrame(aStarStep);
+            } else if (algorithmRunning) {
+                // Open set is empty, no path found
+                messageBox.textContent = 'No path found!';
+                algorithmRunning = false;
+                drawGrid(); // Redraw final state
+                startNode.draw(COLORS.START); // Ensure start node is green
+                endNode.draw(COLORS.END);     // Ensure end node is red
+            }
+        }
+
+
+        // --- Control Button Handlers ---
+
+
+        document.getElementById('startAlgorithm').addEventListener('click', () => {
+            if (algorithmRunning) {
+                messageBox.textContent = 'Algorithm is already running.';
+                return;
+            }
+            if (!startNode || !endNode) {
+                messageBox.textContent = 'Please set both start and end nodes.';
+                return;
+            }
+
+
+            // Reset algorithm state for a new run
+            cancelAnimationFrame(animationFrameId); // Stop any previous animation
+            resetAlgorithmState();
+            algorithmRunning = true;
+            messageBox.textContent = 'Starting A* algorithm...';
+
+
+            // Re-initialize start and end nodes for the algorithm
+            startNode.g = 0;
+            startNode.f = heuristic(startNode, endNode);
+            openSet.push(startNode);
+
+
+            // Start the animation loop
+            animationFrameId = requestAnimationFrame(aStarStep);
+        });
+
+
+        document.getElementById('clearGrid').addEventListener('click', () => {
+            if (algorithmRunning) {
+                messageBox.textContent = 'Please stop the algorithm first.';
+                return;
+            }
+            // Clear only walls and algorithm-related colors
+            for (let i = 0; i < COLS; i++) {
+                for (let j = 0; j < ROWS; j++) {
+                    const node = grid[i][j];
+                    if (node.type !== NODE_TYPE.START && node.type !== NODE_TYPE.END) {
+                        node.type = NODE_TYPE.EMPTY;
+                    }
+                    // Reset A* properties
+                    node.f = 0;
+                    node.g = 0;
+                    node.h = 0;
+                    node.parent = null;
+                }
+            }
+            resetAlgorithmState();
+            messageBox.textContent = 'Walls cleared. Click and drag to draw new walls.';
+            drawGrid(); // Redraw the cleaned grid
+            // Ensure start and end nodes are redrawn
+            if (startNode) startNode.draw(COLORS.START);
+            if (endNode) endNode.draw(COLORS.END);
+        });
+
+
+        document.getElementById('resetGrid').addEventListener('click', () => {
+            cancelAnimationFrame(animationFrameId); // Stop any running animation
+            algorithmRunning = false;
+            initializeGrid(); // Resets everything including start/end
+            resetAlgorithmState();
+            drawGrid(); // Draw the empty grid
+            messageBox.textContent = 'Grid reset. Click and drag to draw walls, or select a mode to set start/end points.';
+        });
+
+
+        // Function to reset algorithm specific state (called before new run or on clear/reset)
+        function resetAlgorithmState() {
+            openSet = [];
+            closedSet = [];
+            path = [];
+            cancelAnimationFrame(animationFrameId); // Ensure any ongoing animation is stopped
+
+
+            // Reset A* properties and types for all nodes (except walls, start, end)
+            for (let i = 0; i < COLS; i++) {
+                for (let j = 0; j < ROWS; j++) {
+                    const node = grid[i][j];
+                    node.f = 0;
+                    node.g = 0;
+                    node.h = 0;
+                    node.parent = null;
+                    if (node.type !== NODE_TYPE.WALL && node.type !== NODE_TYPE.START && node.type !== NODE_TYPE.END) {
+                        node.type = NODE_TYPE.EMPTY; // Reset visualization state
+                    }
+                }
+            }
+            drawGrid(); // Redraw the grid to clear old algorithm traces
+            // Redraw start and end nodes to ensure they are on top
+            if (startNode) startNode.draw(COLORS.START);
+            if (endNode) endNode.draw(COLORS.END);
+        }
+
+
+        // Handle mode selection (radio buttons)
+        document.querySelectorAll('input[name="mode"]').forEach(radio => {
+            radio.addEventListener('change', (e) => {
+                currentMode = e.target.value;
+                messageBox.textContent = `Mode changed to: ${currentMode.charAt(0).toUpperCase() + currentMode.slice(1)}.`;
+            });
+        });
+
+
+        // --- Initial Setup ---
+        initializeGrid();
+        drawGrid();
+
+
+        // Adjust canvas size on window resize (simple responsiveness for now)
+        window.addEventListener('resize', () => {
+            // Re-calculate canvas dimensions based on COLS/ROWS and a potential new CELL_SIZE
+            // For this fixed CELL_SIZE example, this might not change much,
+            // but it's good practice for fluid designs.
+            // If the canvas itself is styled with CSS width: 100%,
+            // then its internal drawing buffer needs to be updated.
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+            // Recalculate CELL_SIZE if you want cells to scale with canvas size
+            // For simplicity here, we keep CELL_SIZE fixed and let CSS handle scaling.
+            // However, for proper rendering, the internal canvas dimensions should match CSS dimensions.
+            // This setup works because canvas.width/height are set based on COLS/ROWS,
+            // and then CSS scales the canvas if it's too big/small.
+            // A more robust solution might recalculate COLS/ROWS based on available space.
+            drawGrid();
+        });
+    </script>
+</body>
+</html>
+
