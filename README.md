@@ -1,1 +1,0 @@
-# astar_path_visualizer
